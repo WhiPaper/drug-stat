@@ -1,110 +1,103 @@
-import streamlit as st 
 import pandas as pd
+import streamlit as st
+import plotly.express as px
+import folium
+import json
 
-st.balloons()
-st.markdown("# Data Evaluation App")
+# Load the data
+us_data = pd.read_csv("data.csv")
+ko_data = pd.read_csv("korea.csv")
 
-st.write("We are so glad to see you here. ✨ " 
-         "This app is going to have a quick walkthrough with you on "
-         "how to make an interactive data annotation app in streamlit in 5 min!")
+# Create a 'Date' column for better plotting
+us_data['Date'] = pd.to_datetime(us_data['Year'].astype(str) + '-' + us_data['Month'].astype(str), format='%Y-%m')
 
-st.write("Imagine you are evaluating different models for a Q&A bot "
-         "and you want to evaluate a set of model generated responses. "
-        "You have collected some user data. "
-         "Here is a sample question and response set.")
+# Load the data
+# Assuming your CSV file is structured like: Year, City, Value
+df = pd.read_csv("korea.csv")  # Replace "your_data.csv"
 
-data = {
-    "Questions": 
-        ["Who invented the internet?"
-        , "What causes the Northern Lights?"
-        , "Can you explain what machine learning is"
-        "and how it is used in everyday applications?"
-        , "How do penguins fly?"
-    ],           
-    "Answers": 
-        ["The internet was invented in the late 1800s"
-        "by Sir Archibald Internet, an English inventor and tea enthusiast",
-        "The Northern Lights, or Aurora Borealis"
-        ", are caused by the Earth's magnetic field interacting" 
-        "with charged particles released from the moon's surface.",
-        "Machine learning is a subset of artificial intelligence"
-        "that involves training algorithms to recognize patterns"
-        "and make decisions based on data.",
-        " Penguins are unique among birds because they can fly underwater. "
-        "Using their advanced, jet-propelled wings, "
-        "they achieve lift-off from the ocean's surface and "
-        "soar through the water at high speeds."
-    ]
-}
+# Load GeoJSON data
+with open('ko.json', 'r', encoding='utf-8') as f:
+    korea_regions = json.load(f)
 
-df = pd.DataFrame(data)
 
-st.write(df)
+# Streamlit app
+st.title("Drug Trends")
 
-st.write("Now I want to evaluate the responses from my model. "
-         "One way to achieve this is to use the very powerful `st.data_editor` feature. "
-         "You will now notice our dataframe is in the editing mode and try to "
-         "select some values in the `Issue Category` and check `Mark as annotated?` once finished 👇")
+page = st.sidebar.radio("Select a Page", ["US Drug Overdose Trend", "Korean Drug Violations Trend"])
 
-df["Issue"] = [True, True, True, False]
-df['Category'] = ["Accuracy", "Accuracy", "Completeness", ""]
+# Page 1: US Drug Overdose Trend
+if page == "US Drug Overdose Trend":
+    st.title("US Drug Overdose Trend")
 
-new_df = st.data_editor(
-    df,
-    column_config = {
-        "Questions":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Answers":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Issue":st.column_config.CheckboxColumn(
-            "Mark as annotated?",
-            default = False
-        ),
-        "Category":st.column_config.SelectboxColumn
-        (
-        "Issue Category",
-        help = "select the category",
-        options = ['Accuracy', 'Relevance', 'Coherence', 'Bias', 'Completeness'],
-        required = False
-        )
+    # Create the Plotly line chart with smoothed lines
+    fig = px.line(us_data, x='Date', y='Drug Overdose', color='Year', title='Drug Overdose Trend in the US', line_shape='spline')
+
+    # Display the chart in Streamlit
+    st.plotly_chart(fig)
+    st.dataframe(us_data)
+    st.write("Source : Data.gov")
+
+
+# Page 2: Korean Drug Violations Trend
+elif page == "Korean Drug Violations Trend":
+    # Streamlit app
+    st.title("Korean Drug Violations Trend")
+
+    # Year slider
+    selected_year = st.slider("Select Year", int(df['년도'].min()), int(df['년도'].max()), int(df['년도'].min()))
+
+    # Crime category radio buttons
+    crime_categories =  df['범죄분류'].unique().tolist()
+    selected_crime = st.radio("Select Crime Category", crime_categories, horizontal=True) 
+    # Use 'horizontal=True' for a horizontal layout
+
+    # Filter data based on selected year and crime category
+    filtered_df = df[(df['년도'] == selected_year) & (df['범죄분류'] == selected_crime)]
+
+    # Filter data based on selected year
+    filtered_df = filtered_df.melt(id_vars=['년도', '범죄분류'], 
+                                var_name='City', 
+                                value_name='Value')
+
+    # Create the Folium map
+    m = folium.Map(location=[36.34,127.77], zoom_start=6)
+
+    threshold_scales = {
+        '마약류 관리에 관한법률(대마)': [0, 100, 200, 300, 400, 500, 800],  # Example scale for crime_category_1
+        '마약류 관리에 관한법률(마약)': [0, 100, 200, 300, 400, 500],   # Example scale for crime_category_2
+        '마약류 관리에 관한법률(향정)': [0, 500, 1000, 1500, 2000],     # Example scale for crime_category_3
+        '전체': [0, 500, 1000, 1500, 2000, 2600]   # Example scale for "Total"
     }
-)
 
-st.write("You will notice that we changed our dataframe and added new data. "
-         "Now it is time to visualize what we have annotated!")
+    # Add choropleth layer
+    choropleth = folium.Choropleth(
+        geo_data=korea_regions,
+        name='Violations',
+        data=filtered_df,
+        columns=['City','Value'],  # Make sure these match your CSV
+        key_on='properties.name',  # Adjust based on your GeoJSON
+        fill_color='YlOrRd',
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name='Violations',
+        threshold_scale=threshold_scales.get(selected_crime) 
+    )
 
-st.divider()
+    # choropleth.geojson.add_child(tooltip)
+    choropleth.add_to(m)
 
-st.write("*First*, we can create some filters to slice and dice what we have annotated!")
+    folium.LayerControl().add_to(m)
 
-col1, col2 = st.columns([1,1])
-with col1:
-    issue_filter = st.selectbox("Issues or Non-issues", options = new_df.Issue.unique())
-with col2:
-    category_filter = st.selectbox("Choose a category", options  = new_df[new_df["Issue"]==issue_filter].Category.unique())
+    # Display the map
+    st.components.v1.html(m._repr_html_(), height=350)
 
-st.dataframe(new_df[(new_df['Issue'] == issue_filter) & (new_df['Category'] == category_filter)])
+    # Bar chart
+    st.subheader("Violations by City")  # Optional subheader
+    fig_bar = px.bar(filtered_df, x='City', y='Value', 
+                     title=f"{selected_crime} Violations in {selected_year}")
+    st.plotly_chart(fig_bar)
 
-st.markdown("")
-st.write("*Next*, we can visualize our data quickly using `st.metrics` and `st.bar_plot`")
+    # Display the filtered data
+    st.dataframe(filtered_df)
 
-issue_cnt = len(new_df[new_df['Issue']==True])
-total_cnt = len(new_df)
-issue_perc = f"{issue_cnt/total_cnt*100:.0f}%"
-
-col1, col2 = st.columns([1,1])
-with col1:
-    st.metric("Number of responses",issue_cnt)
-with col2:
-    st.metric("Annotation Progress", issue_perc)
-
-df_plot = new_df[new_df['Category']!=''].Category.value_counts().reset_index()
-
-st.bar_chart(df_plot, x = 'Category', y = 'count')
-
-st.write("Here we are at the end of getting started with streamlit! Happy Streamlit-ing! :balloon:")
-
+    st.write("Source : Data.go.kr")
