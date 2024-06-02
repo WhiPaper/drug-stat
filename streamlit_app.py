@@ -86,15 +86,28 @@ elif page == "Korean Drug Violations Trend":
     choropleth.add_to(m)
 
     folium.LayerControl().add_to(m)
-    tab1, tab2, tab3 = st.tabs(["Map", "Bar Chart", "Table"])
+    tab1, tab2, tab3, tab4= st.tabs(["Map", "Bar Chart", "Line Chart", "Table"])
 
     with tab1:
         st.components.v1.html(m._repr_html_(), height=350)
     with tab2:
         fig_bar = px.bar(filtered_df, x='City', y='Value', 
-                     title=f"{selected_crime} Violations in {selected_year}")
+                    title=f"{selected_crime} Violations in {selected_year}")
         st.plotly_chart(fig_bar)
     with tab3:
-        st.dataframe(filtered_df)
+        # Line chart showing yearly data
+        # Filter data based on selected year and crime category
+        line_df = df[(df['범죄분류'] == selected_crime)]
 
+        # Filter data based on selected year
+        line_df = line_df.melt(id_vars=['년도', '범죄분류'], 
+                                var_name='City', 
+                                value_name='Value')
+        st.subheader("Violations by City Over Time")
+        fig_line = px.line(line_df, x='년도', y='Value', color='City', 
+                       title=f"{selected_crime} Violations Over Time",markers=True)
+        fig_line.update_traces(textposition="bottom right")
+        st.plotly_chart(fig_line)
+    with tab4:
+        st.dataframe(filtered_df)
     st.write("Source : Data.go.kr")
