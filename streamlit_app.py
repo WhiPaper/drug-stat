@@ -83,21 +83,18 @@ elif page == "Korean Drug Violations Trend":
         threshold_scale=threshold_scales.get(selected_crime) 
     )
 
-    # choropleth.geojson.add_child(tooltip)
     choropleth.add_to(m)
 
     folium.LayerControl().add_to(m)
+    tab1, tab2, tab3 = st.tabs(["Map", "Bar Chart", "Table"])
 
-    # Display the map
-    st.components.v1.html(m._repr_html_(), height=350)
-
-    # Bar chart
-    st.subheader("Violations by City")  # Optional subheader
-    fig_bar = px.bar(filtered_df, x='City', y='Value', 
+    with tab1:
+        st.components.v1.html(m._repr_html_(), height=350)
+    with tab2:
+        fig_bar = px.bar(filtered_df, x='City', y='Value', 
                      title=f"{selected_crime} Violations in {selected_year}")
-    st.plotly_chart(fig_bar)
-
-    # Display the filtered data
-    st.dataframe(filtered_df)
+        st.plotly_chart(fig_bar)
+    with tab3:
+        st.dataframe(filtered_df)
 
     st.write("Source : Data.go.kr")
